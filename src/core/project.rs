@@ -29,3 +29,31 @@ impl std::fmt::Display for ProjectId {
         f.write_str(&self.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_a_non_empty_id() {
+        let id = ProjectId::new("my-project").unwrap();
+        assert_eq!(id.as_str(), "my-project");
+        assert_eq!(id.to_string(), "my-project");
+    }
+
+    #[test]
+    fn rejects_an_empty_id() {
+        assert!(matches!(
+            ProjectId::new(""),
+            Err(CoreError::InvalidProjectId(_))
+        ));
+    }
+
+    #[test]
+    fn rejects_a_whitespace_only_id() {
+        assert!(matches!(
+            ProjectId::new("   "),
+            Err(CoreError::InvalidProjectId(_))
+        ));
+    }
+}

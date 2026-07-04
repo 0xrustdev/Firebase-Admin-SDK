@@ -56,3 +56,72 @@ impl ClientMode {
         matches!(self, ClientMode::Live)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // `std::env::var` reads process-global state; serialize tests that touch
+    // `EMULATOR_HOST_ENV_VAR` so they can't observe each other's values when
+    // the test binary runs them concurrently.
+    static ENV_VAR_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_emulator_env_var<T>(value: Option<&str>, f: impl FnOnce() -> T) -> T {
+        let _guard = ENV_VAR_TEST_LOCK.lock().unwrap();
+        let previous = std::env::var(EMULATOR_HOST_ENV_VAR).ok();
+        match value {
+            Some(v) => std::env::set_var(EMULATOR_HOST_ENV_VAR, v),
+            None => std::env::remove_var(EMULATOR_HOST_ENV_VAR),
+        }
+
+        let result = f();
+
+        match previous {
+            Some(v) => std::env::set_var(EMULATOR_HOST_ENV_VAR, v),
+            None => std::env::remove_var(EMULATOR_HOST_ENV_VAR),
+        }
+        result
+    }
+
+    #[test]
+    fn explicit_host_wins_over_env_var() {
+        with_emulator_env_var(Some("env-host:9099"), || {
+            let mode = ClientMode::resolve(Some("explicit-host:9099".to_string()));
+            assert!(matches!(mode, ClientMode::Emulator { host } if host == "explicit-host:9099"));
+        });
+    }
+
+    #[test]
+    fn env_var_is_used_when_no_explicit_host_given() {
+        with_emulator_env_var(Some("env-host:9099"), || {
+            let mode = ClientMode::resolve(None);
+            assert!(matches!(mode, ClientMode::Emulator { host } if host == "env-host:9099"));
+        });
+    }
+
+    #[test]
+    fn whitespace_only_env_var_is_treated_as_unset() {
+        with_emulator_env_var(Some("   "), || {
+            let mode = ClientMode::resolve(None);
+            assert!(matches!(mode, ClientMode::Live));
+        });
+    }
+
+    #[test]
+    fn defaults_to_live_with_nothing_set() {
+        with_emulator_env_var(None, || {
+            let mode = ClientMode::resolve(None);
+            assert!(matches!(mode, ClientMode::Live));
+        });
+    }
+
+    #[test]
+    fn requires_bearer_token_only_in_live_mode() {
+        assert!(ClientMode::Live.requires_bearer_token());
+        assert!(!ClientMode::Emulator {
+            host: "localhost:9099".to_string()
+        }
+        .requires_bearer_token());
+    }
+}

@@ -80,14 +80,26 @@ impl AuthClient {
         .await
     }
 
+    /// Resolves an OAuth2 bearer token for calls to the Identity Toolkit
+    /// REST API.
+    ///
+    /// # Implementation status
+    ///
+    /// User-management calls against production Firebase require an OAuth2
+    /// access token obtained by exchanging the configured credentials with
+    /// Google's token endpoint. That exchange is not implemented yet for
+    /// either [`Credentials::ServiceAccount`] or (when the
+    /// `application-default-credentials` feature is enabled)
+    /// [`Credentials::ApplicationDefault`] — both paths return a clear error
+    /// here rather than sending an unauthenticated request to production.
+    /// Tracked as a required step before `v0.2.0`; see `README.md`'s
+    /// roadmap.
     async fn bearer_token(&self) -> Result<Option<String>, AuthError> {
         if !self.mode.requires_bearer_token() {
             return Ok(None);
         }
         match &self.credentials {
-            Credentials::ServiceAccount(_key) => {
-                // TODO(v0.2): exchange the service account key for an OAuth2
-                // access token (e.g. via `gcp_auth`) instead of erroring.
+            Credentials::ServiceAccount(_) => {
                 Err(AuthError::Core(crate::core::CoreError::Credentials(
                     "OAuth2 bearer token acquisition for service accounts is not yet implemented"
                         .to_string(),

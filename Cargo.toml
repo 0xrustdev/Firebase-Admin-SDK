@@ -26,8 +26,12 @@ url = "2"
 gcp_auth = { version = "0.12", optional = true }
 
 [features]
-default = ["emulator", "application-default-credentials"]
+default = ["emulator"]
 emulator = []
+# Not yet functional: AuthClientBuilder::application_default_credentials()
+# currently returns an explicit "not yet implemented" error at request time.
+# Tracked for a future release; kept off by default so the gcp_auth
+# dependency isn't pulled in for consumers who don't need it yet.
 application-default-credentials = ["dep:gcp_auth"]
 
 [dev-dependencies]

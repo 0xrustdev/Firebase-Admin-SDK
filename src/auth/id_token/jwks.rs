@@ -10,6 +10,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 
 const SECURETOKEN_JWKS_URL: &str =
     "https://www.googleapis.com/service_accounts/v1/metadata/jwk/securetoken@system.gserviceaccount.com";
@@ -37,10 +38,18 @@ struct Cached {
 }
 
 /// Fetches and caches Google's public keys used to verify Firebase ID tokens.
+///
+/// Concurrent lookups that miss the cache at the same time (e.g. a burst of
+/// `verify_id_token` calls right after Google rotates its signing keys) share
+/// a single in-flight refresh rather than each issuing their own HTTP
+/// request: an internal lock is held for the duration of the fetch, so
+/// callers that arrive while a refresh is already underway simply wait for
+/// it to finish and then re-check the now-populated cache.
 pub struct JwksCache {
     url: String,
     http: HttpClient,
     cache: RwLock<Option<Cached>>,
+    refresh_lock: Mutex<()>,
 }
 
 impl JwksCache {
@@ -50,12 +59,21 @@ impl JwksCache {
             url: SECURETOKEN_JWKS_URL.to_string(),
             http,
             cache: RwLock::new(None),
+            refresh_lock: Mutex::new(()),
         }
     }
 
     /// Returns the RSA public key components (`n`, `e`, base64url-encoded)
     /// for the given key id, fetching or refreshing the cache as needed.
     pub async fn public_key(&self, kid: &str) -> Result<(String, String), TokenVerificationError> {
+        if let Some((n, e)) = self.cached_key(kid) {
+            return Ok((n, e));
+        }
+
+        let _guard = self.refresh_lock.lock().await;
+
+        // Another caller may have refreshed the cache while we were waiting
+        // for the lock; re-check before issuing a redundant request.
         if let Some((n, e)) = self.cached_key(kid) {
             return Ok((n, e));
         }
@@ -125,4 +143,105 @@ fn parse_max_age(cache_control: &str) -> Option<Duration> {
         let value = part.strip_prefix("max-age=")?;
         value.parse::<u64>().ok().map(Duration::from_secs)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn sample_jwk_set_body() -> serde_json::Value {
+        serde_json::json!({
+            "keys": [
+                {
+                    "kid": "key-1",
+                    "kty": "RSA",
+                    "alg": "RS256",
+                    "use": "sig",
+                    "n": "test-n-value",
+                    "e": "AQAB",
+                }
+            ]
+        })
+    }
+
+    async fn cache_pointed_at(server: &MockServer) -> JwksCache {
+        let http = HttpClient::default();
+        JwksCache {
+            url: format!("{}/jwks", server.uri()),
+            http,
+            cache: RwLock::new(None),
+            refresh_lock: Mutex::new(()),
+        }
+    }
+
+    #[tokio::test]
+    async fn fetches_and_returns_a_known_key() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/jwks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(sample_jwk_set_body()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let cache = cache_pointed_at(&server).await;
+        let (n, e) = cache.public_key("key-1").await.unwrap();
+        assert_eq!(n, "test-n-value");
+        assert_eq!(e, "AQAB");
+    }
+
+    #[tokio::test]
+    async fn unknown_kid_after_refresh_is_invalid_signature() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/jwks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(sample_jwk_set_body()))
+            .mount(&server)
+            .await;
+
+        let cache = cache_pointed_at(&server).await;
+        let err = cache.public_key("does-not-exist").await.unwrap_err();
+        assert!(matches!(err, TokenVerificationError::InvalidSignature));
+    }
+
+    #[tokio::test]
+    async fn a_second_lookup_uses_the_cache_and_does_not_refetch() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/jwks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(sample_jwk_set_body()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let cache = cache_pointed_at(&server).await;
+        cache.public_key("key-1").await.unwrap();
+        cache.public_key("key-1").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn malformed_response_body_surfaces_as_jwks_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/jwks"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
+            .mount(&server)
+            .await;
+
+        let cache = cache_pointed_at(&server).await;
+        let err = cache.public_key("key-1").await.unwrap_err();
+        assert!(matches!(err, TokenVerificationError::Jwks(_)));
+    }
+
+    #[test]
+    fn parses_max_age_from_cache_control_header() {
+        assert_eq!(
+            parse_max_age("public, max-age=21600, must-revalidate"),
+            Some(Duration::from_secs(21600))
+        );
+        assert_eq!(parse_max_age("no-store"), None);
+        assert_eq!(parse_max_age(""), None);
+    }
 }

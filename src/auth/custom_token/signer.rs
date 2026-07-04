@@ -66,3 +66,83 @@ impl CustomTokenSigner {
         encode(&header, &payload, &encoding_key)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jsonwebtoken::{decode, decode_header, DecodingKey, Validation};
+    use serde::Deserialize;
+
+    const TEST_PRIVATE_KEY_PEM: &str = include_str!("../../../tests/fixtures/test_private_key.pem");
+    const TEST_PUBLIC_KEY_PEM: &[u8] =
+        include_bytes!("../../../tests/fixtures/test_public_key.pem");
+
+    #[derive(Debug, Deserialize)]
+    struct DecodedClaims {
+        iss: String,
+        sub: String,
+        aud: String,
+        iat: i64,
+        exp: i64,
+        uid: String,
+        claims: Option<serde_json::Map<String, serde_json::Value>>,
+    }
+
+    fn test_service_account() -> ServiceAccountKey {
+        ServiceAccountKey {
+            client_email: "test@test-project.iam.gserviceaccount.com".to_string(),
+            private_key: TEST_PRIVATE_KEY_PEM.to_string(),
+            project_id: "test-project".to_string(),
+            private_key_id: "test-key-id".to_string(),
+        }
+    }
+
+    /// Decodes independently of [`CustomTokenSigner`]/the crate's own
+    /// verifier, using raw `jsonwebtoken` calls against the fixture public
+    /// key, so this test can't pass merely because signing and verifying
+    /// share a bug.
+    fn independently_decode(token: &str) -> DecodedClaims {
+        let header = decode_header(token).unwrap();
+        assert_eq!(header.alg, Algorithm::RS256);
+        assert_eq!(header.kid.as_deref(), Some("test-key-id"));
+
+        let decoding_key = DecodingKey::from_rsa_pem(TEST_PUBLIC_KEY_PEM).unwrap();
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.set_audience(&[CUSTOM_TOKEN_AUDIENCE]);
+        validation.set_issuer(&["test@test-project.iam.gserviceaccount.com"]);
+        validation.validate_exp = false; // signer sets exp ~1h out; nothing to validate against here.
+
+        decode::<DecodedClaims>(token, &decoding_key, &validation)
+            .unwrap()
+            .claims
+    }
+
+    #[test]
+    fn creates_a_token_with_the_documented_claim_shape() {
+        let signer = CustomTokenSigner::new(test_service_account());
+        let token = signer.create_custom_token("some-uid", None).unwrap();
+
+        let claims = independently_decode(&token);
+        assert_eq!(claims.uid, "some-uid");
+        assert_eq!(claims.iss, "test@test-project.iam.gserviceaccount.com");
+        assert_eq!(claims.sub, "test@test-project.iam.gserviceaccount.com");
+        assert_eq!(claims.aud, CUSTOM_TOKEN_AUDIENCE);
+        assert!(claims.exp > claims.iat);
+        assert!(claims.exp - claims.iat <= CUSTOM_TOKEN_TTL.as_secs() as i64);
+        assert!(claims.claims.is_none());
+    }
+
+    #[test]
+    fn embeds_custom_claims_when_provided() {
+        let signer = CustomTokenSigner::new(test_service_account());
+        let mut extra = serde_json::Map::new();
+        extra.insert("admin".to_string(), serde_json::Value::Bool(true));
+
+        let token = signer
+            .create_custom_token("some-uid", Some(extra.clone()))
+            .unwrap();
+
+        let claims = independently_decode(&token);
+        assert_eq!(claims.claims, Some(extra));
+    }
+}

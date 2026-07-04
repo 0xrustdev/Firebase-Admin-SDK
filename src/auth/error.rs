@@ -1,6 +1,7 @@
 //! Error types for the `auth` module.
 
 use crate::core::CoreError;
+use serde::Deserialize;
 
 /// Errors that can occur while verifying an ID token or session cookie.
 #[derive(Debug, thiserror::Error)]
@@ -64,4 +65,95 @@ pub enum AuthError {
     /// The requested user does not exist.
     #[error("user not found")]
     UserNotFound,
+}
+
+/// The `{"error": {...}}` envelope Google APIs use for error responses.
+///
+/// See <https://cloud.google.com/apis/design/errors#http_mapping>. The
+/// Identity Toolkit API additionally nests a well-known short code (e.g.
+/// `EMAIL_EXISTS`, `USER_NOT_FOUND`, `WEAK_PASSWORD`) as the `message` field
+/// of the first entry in `errors`, or as a suffix on the top-level `message`
+/// (`"INVALID_ID_TOKEN : Firebase ID token has ..."`); both shapes appear in
+/// the wild depending on the endpoint, so both are checked.
+#[derive(Debug, Deserialize)]
+struct GoogleApiErrorBody {
+    error: GoogleApiError,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleApiError {
+    message: String,
+    #[serde(default)]
+    errors: Vec<GoogleApiErrorDetail>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleApiErrorDetail {
+    reason: Option<String>,
+}
+
+/// Turns a [`reqwest::Response`] into a parsed value, or an
+/// [`AuthError::Api`]/[`AuthError::Core`] if the request failed or the
+/// success body couldn't be deserialized.
+///
+/// Centralizes the "check status, read body, extract Identity Toolkit's
+/// error code" logic shared by every Identity Toolkit call site (session
+/// cookie creation, user management), so error-code parsing only needs to be
+/// correct in one place.
+pub(crate) async fn parse_identity_toolkit_response<T: serde::de::DeserializeOwned>(
+    response: reqwest::Response,
+) -> Result<T, AuthError> {
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "<no response body>".to_string());
+        return Err(AuthError::from_api_response(status, &body));
+    }
+
+    response
+        .json::<T>()
+        .await
+        .map_err(|e| AuthError::Core(CoreError::Http(e)))
+}
+
+impl AuthError {
+    /// Builds an [`AuthError::Api`] from a non-success HTTP response,
+    /// extracting Identity Toolkit's well-known short error code from the
+    /// response body into `error_code` when present.
+    fn from_api_response(status: u16, body: &str) -> Self {
+        let (message, error_code) = match serde_json::from_str::<GoogleApiErrorBody>(body) {
+            Ok(parsed) => {
+                let code = parsed
+                    .error
+                    .errors
+                    .first()
+                    .and_then(|detail| detail.reason.clone())
+                    .or_else(|| {
+                        // Identity Toolkit often puts the short code as the
+                        // whole message, or as a "CODE : detail" prefix.
+                        parsed
+                            .error
+                            .message
+                            .split(':')
+                            .next()
+                            .map(str::trim)
+                            .filter(|s| {
+                                !s.is_empty()
+                                    && s.chars().all(|c| c.is_ascii_uppercase() || c == '_')
+                            })
+                            .map(str::to_string)
+                    });
+                (parsed.error.message, code)
+            }
+            Err(_) => (body.to_string(), None),
+        };
+
+        AuthError::Api {
+            status,
+            message,
+            error_code,
+        }
+    }
 }

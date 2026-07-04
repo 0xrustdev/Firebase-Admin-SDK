@@ -28,10 +28,18 @@ reasoning behind it — in particular, why `src/core/` exists separately from
 - Run `cargo clippy --all-targets --all-features -- -D warnings` and fix any
   warnings.
 - Run `cargo test --all-features` and `cargo test --doc --all-features`.
-- Add or update tests for any behavior change. Token-verification logic in
-  particular should include negative-case coverage (expired, wrong audience,
-  tampered signature, etc.) — see `src/auth/id_token/verifier.rs` for the
-  existing pattern.
+- Add or update tests for any behavior change:
+  - Token-verification logic should include negative-case coverage (expired,
+    wrong audience, tampered signature, etc.) — see
+    `src/auth/id_token/verifier.rs` for the existing pattern.
+  - New Identity Toolkit REST calls (in `src/auth/users/operations.rs` or
+    similar) should be tested against a mocked HTTP server using `wiremock`,
+    not the live emulator — see the `#[cfg(test)]` module in
+    `src/auth/users/operations.rs` for the existing pattern (success paths,
+    empty-result paths, and structured-error paths with `error_code`).
+  - Reserve `tests/emulator_*.rs` (the real Firebase Auth Emulator) for
+    end-to-end round-trip coverage, not for testing individual error branches
+    — those are cheaper and faster to cover with `wiremock`.
 - Add a doc comment (`///`) to any new public item; `cargo doc --all-features`
   should build without warnings.
 

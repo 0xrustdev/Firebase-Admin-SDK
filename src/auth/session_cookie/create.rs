@@ -1,6 +1,6 @@
 //! Session cookie creation via the Identity Toolkit `:createSessionCookie` endpoint.
 
-use crate::auth::error::AuthError;
+use crate::auth::error::{parse_identity_toolkit_response, AuthError};
 use crate::core::HttpClient;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -35,24 +35,7 @@ pub async fn create_session_cookie(
     };
 
     let response = http.inner().post(endpoint).json(&body).send().await?;
-
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let message = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "unknown error".to_string());
-        return Err(AuthError::Api {
-            status,
-            message,
-            error_code: None,
-        });
-    }
-
-    let parsed: CreateSessionCookieResponse = response
-        .json()
-        .await
-        .map_err(|e| AuthError::Core(crate::core::CoreError::Http(e)))?;
+    let parsed: CreateSessionCookieResponse = parse_identity_toolkit_response(response).await?;
 
     Ok(parsed.session_cookie)
 }

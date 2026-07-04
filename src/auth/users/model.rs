@@ -1,8 +1,8 @@
 //! Ergonomic, Rust-facing user types.
 //!
-//! These are distinct from the wire-format DTOs in
-//! [`crate::auth::identity_toolkit::requests`] so that the public API never
-//! exposes Google's REST field naming or shapes directly.
+//! These are distinct from the crate-internal wire-format DTOs used to talk
+//! to the Identity Toolkit REST API, so that the public API never exposes
+//! Google's REST field naming or shapes directly.
 
 use crate::auth::identity_toolkit::requests::AccountInfo;
 use serde_json::Map;

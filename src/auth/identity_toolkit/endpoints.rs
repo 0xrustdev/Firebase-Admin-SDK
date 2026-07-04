@@ -32,6 +32,16 @@ impl IdentityToolkitEndpoints {
         }
     }
 
+    /// Endpoints pointed at an arbitrary base URL.
+    ///
+    /// Used by tests to point at a mock HTTP server; not exposed outside the
+    /// crate since real callers should use [`Self::live`] or
+    /// [`Self::emulator`].
+    #[cfg(test)]
+    pub(crate) fn custom(base: impl Into<String>) -> Self {
+        Self { base: base.into() }
+    }
+
     /// `accounts:lookup` — fetch one or more users by uid, email, or phone number.
     pub fn lookup(&self) -> String {
         format!("{}/accounts:lookup", self.base)

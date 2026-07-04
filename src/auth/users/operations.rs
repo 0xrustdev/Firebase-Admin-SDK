@@ -1,6 +1,6 @@
 //! User management operations against the Identity Toolkit REST API.
 
-use crate::auth::error::AuthError;
+use crate::auth::error::{parse_identity_toolkit_response, AuthError};
 use crate::auth::identity_toolkit::requests::{
     AccountsResponse, DeleteRequest, LookupRequest, SignUpRequest, UpdateRequest,
 };
@@ -43,27 +43,6 @@ impl<'a> UserOperations<'a> {
         }
     }
 
-    async fn parse_response<T: serde::de::DeserializeOwned>(
-        response: reqwest::Response,
-    ) -> Result<T, AuthError> {
-        if !response.status().is_success() {
-            let status = response.status().as_u16();
-            let message = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            return Err(AuthError::Api {
-                status,
-                message,
-                error_code: None,
-            });
-        }
-        response
-            .json::<T>()
-            .await
-            .map_err(|e| AuthError::Core(CoreError::Http(e)))
-    }
-
     /// Fetches a single user by uid.
     pub async fn get_user(&self, uid: &str) -> Result<UserRecord, AuthError> {
         let request = LookupRequest {
@@ -75,7 +54,7 @@ impl<'a> UserOperations<'a> {
             .json(&request)
             .send()
             .await?;
-        let parsed: AccountsResponse = Self::parse_response(response).await?;
+        let parsed: AccountsResponse = parse_identity_toolkit_response(response).await?;
         parsed
             .users
             .into_iter()
@@ -95,7 +74,7 @@ impl<'a> UserOperations<'a> {
             .json(&request)
             .send()
             .await?;
-        let parsed: AccountsResponse = Self::parse_response(response).await?;
+        let parsed: AccountsResponse = parse_identity_toolkit_response(response).await?;
         parsed
             .users
             .into_iter()
@@ -118,7 +97,7 @@ impl<'a> UserOperations<'a> {
             .json(&body)
             .send()
             .await?;
-        let local_id: serde_json::Value = Self::parse_response(response).await?;
+        let local_id: serde_json::Value = parse_identity_toolkit_response(response).await?;
         let uid = local_id
             .get("localId")
             .and_then(|v| v.as_str())
@@ -154,7 +133,7 @@ impl<'a> UserOperations<'a> {
             .json(&body)
             .send()
             .await?;
-        let _: serde_json::Value = Self::parse_response(response).await?;
+        let _: serde_json::Value = parse_identity_toolkit_response(response).await?;
         self.get_user(uid).await
     }
 
@@ -185,7 +164,7 @@ impl<'a> UserOperations<'a> {
             .json(&body)
             .send()
             .await?;
-        let _: serde_json::Value = Self::parse_response(response).await?;
+        let _: serde_json::Value = parse_identity_toolkit_response(response).await?;
         Ok(())
     }
 
@@ -211,11 +190,172 @@ impl<'a> UserOperations<'a> {
             })
             .send()
             .await?;
-        let parsed: AccountsResponse = Self::parse_response(response).await?;
+        let parsed: AccountsResponse = parse_identity_toolkit_response(response).await?;
 
         Ok(UserPage {
             users: parsed.users.into_iter().map(UserRecord::from).collect(),
             next_page_token: parsed.next_page_token,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    async fn operations_against(server: &MockServer) -> (HttpClient, IdentityToolkitEndpoints) {
+        (
+            HttpClient::default(),
+            IdentityToolkitEndpoints::custom(server.uri()),
+        )
+    }
+
+    #[tokio::test]
+    async fn get_user_returns_the_matching_record() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/accounts:lookup"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "users": [{
+                    "localId": "uid-1",
+                    "email": "user@example.com",
+                    "emailVerified": true,
+                }]
+            })))
+            .mount(&server)
+            .await;
+
+        let (http, endpoints) = operations_against(&server).await;
+        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+
+        let user = ops.get_user("uid-1").await.unwrap();
+        assert_eq!(user.uid, "uid-1");
+        assert_eq!(user.email.as_deref(), Some("user@example.com"));
+        assert!(user.email_verified);
+    }
+
+    #[tokio::test]
+    async fn get_user_with_no_matches_is_user_not_found() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/accounts:lookup"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "users": [] })))
+            .mount(&server)
+            .await;
+
+        let (http, endpoints) = operations_against(&server).await;
+        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+
+        let err = ops.get_user("missing-uid").await.unwrap_err();
+        assert!(matches!(err, AuthError::UserNotFound));
+    }
+
+    #[tokio::test]
+    async fn create_user_looks_up_the_new_user_after_sign_up() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/accounts:signUp"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "localId": "new-uid" })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/accounts:lookup"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "users": [{ "localId": "new-uid", "email": "new@example.com" }]
+            })))
+            .mount(&server)
+            .await;
+
+        let (http, endpoints) = operations_against(&server).await;
+        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+
+        let user = ops
+            .create_user(CreateUserRequest {
+                email: Some("new@example.com".to_string()),
+                password: Some("correct horse battery staple".to_string()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(user.uid, "new-uid");
+    }
+
+    #[tokio::test]
+    async fn delete_user_succeeds_on_a_200_response() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/accounts:delete"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+            .mount(&server)
+            .await;
+
+        let (http, endpoints) = operations_against(&server).await;
+        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+
+        ops.delete_user("uid-1").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_users_returns_records_and_next_page_token() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/accounts:batchGet"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "users": [
+                    { "localId": "uid-1" },
+                    { "localId": "uid-2" },
+                ],
+                "nextPageToken": "page-2",
+            })))
+            .mount(&server)
+            .await;
+
+        let (http, endpoints) = operations_against(&server).await;
+        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+
+        let page = ops.list_users(10, None).await.unwrap();
+        assert_eq!(page.users.len(), 2);
+        assert_eq!(page.next_page_token.as_deref(), Some("page-2"));
+    }
+
+    #[tokio::test]
+    async fn a_structured_api_error_populates_error_code() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/accounts:signUp"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+                "error": {
+                    "code": 400,
+                    "message": "EMAIL_EXISTS",
+                    "errors": [{ "message": "EMAIL_EXISTS", "reason": "EMAIL_EXISTS" }]
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let (http, endpoints) = operations_against(&server).await;
+        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+
+        let err = ops
+            .create_user(CreateUserRequest {
+                email: Some("taken@example.com".to_string()),
+                password: Some("correct horse battery staple".to_string()),
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
+
+        match err {
+            AuthError::Api {
+                status, error_code, ..
+            } => {
+                assert_eq!(status, 400);
+                assert_eq!(error_code.as_deref(), Some("EMAIL_EXISTS"));
+            }
+            other => panic!("expected AuthError::Api, got {other:?}"),
+        }
     }
 }

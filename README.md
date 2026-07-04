@@ -22,12 +22,29 @@ Realtime Database, Cloud Messaging, ...).
 - ID token verification (RS256, JWKS caching, full claim validation)
 - Custom token creation (signed locally with a service account key)
 - User management (create, get, update, delete, list) via the Identity
-  Toolkit REST API
+  Toolkit REST API — against the **Firebase Auth Emulator**
 - Custom claims
 - Session cookie creation (verification: see roadmap)
 - A single, unified client for both production Firebase and the local
   [Firebase Auth Emulator](https://firebase.google.com/docs/emulator-suite) —
   no divergent APIs or generic type parameters to juggle
+
+### Not yet implemented
+
+- **User management against production Firebase.** Calls like `get_user`/
+  `create_user`/etc. require an OAuth2 bearer token when talking to live
+  Firebase; that token-exchange step isn't implemented yet, so these calls
+  currently return a clear error in live mode. They work today against the
+  Firebase Auth Emulator, which doesn't require authentication. Tracked for
+  `v0.2.0`.
+- **Application Default Credentials.** The `application-default-credentials`
+  feature flag and `AuthClientBuilder::application_default_credentials()`
+  exist but are not functional yet (same underlying gap as above); the
+  feature is off by default until this lands.
+- **Session cookie verification** (`verify_session_cookie`) — creation works;
+  verification is an explicit `unimplemented!()` stub pending confirmation of
+  which certificate endpoint Firebase uses for session cookies. Tracked for
+  `v0.2.0`.
 
 ## Quick start
 
