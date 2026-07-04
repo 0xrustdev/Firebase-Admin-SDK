@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest a new feature or Firebase Auth capability to support
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that the crate doesn't support today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: If you have one in mind, sketch the API you'd expect.
+      render: rust
+  - type: input
+    id: firebase-docs
+    attributes:
+      label: Relevant Firebase/Google API documentation
+      description: Link to the relevant Firebase Admin SDK or Identity Toolkit REST API docs, if applicable.

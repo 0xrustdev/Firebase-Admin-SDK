@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a bug in firebase-admin-rs
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including expected vs. actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: A minimal code sample that reproduces the issue.
+      render: rust
+  - type: input
+    id: version
+    attributes:
+      label: firebase-admin version
+    validations:
+      required: true
+  - type: input
+    id: rustc
+    attributes:
+      label: rustc version
+      description: Output of `rustc --version`
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Environment
+      options:
+        - Production Firebase
+        - Firebase Auth Emulator
+        - Both

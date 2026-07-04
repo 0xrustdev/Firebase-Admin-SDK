@@ -1,0 +1,8 @@
+[workspace]
+changelog_update = true
+git_release_enable = true
+semver_check = true
+
+[[package]]
+name = "firebase-admin"
+changelog_path = "CHANGELOG.md"

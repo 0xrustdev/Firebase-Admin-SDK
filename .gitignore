@@ -1,0 +1,10 @@
+/target
+Cargo.lock.bak
+.claude/
+*.pem
+!tests/fixtures/*.pem
+service-account*.json
+.env
+.idea/
+.vscode/
+*.swp
