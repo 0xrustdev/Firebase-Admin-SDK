@@ -74,12 +74,15 @@ concrete type rather than generic over credentials.
 
 ## Roadmap
 
-- **v0.1.0** — ID token verification, custom token creation, basic user CRUD
-  against the emulator.
-- **v0.2.0** — Session cookie verification, OAuth2 bearer tokens for
-  production user management (service account + Application Default
-  Credentials), first-class custom-claims API.
-- **v0.3.0** — Bulk user import, email action links, initial multi-tenancy.
+- **v0.1.0 (current)** — ID token verification, custom token creation,
+  session cookie creation and verification, and full user management
+  (create/get/update/delete/list, custom claims) against both the emulator
+  and production Firebase via OAuth2 bearer tokens (service account +
+  Application Default Credentials).
+- **v0.2.0** — Bulk user import, email action links, initial multi-tenancy.
+- **v0.3.0** — Broader edge-case coverage on the token-verification path
+  (expired/rotated certificates, malformed key responses, clock-skew
+  handling) ahead of a security review.
 - **v1.0.0** — Feature-complete Auth, stable public API, full documentation
   coverage, security review of the token-verification path.
 - **Post-1.0** — Firestore, then Cloud Storage, Realtime Database, Cloud
