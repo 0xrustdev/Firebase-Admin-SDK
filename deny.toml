@@ -3,7 +3,23 @@ targets = []
 
 [advisories]
 version = 2
-ignore = []
+ignore = [
+    # RUSTSEC-2023-0071 (Marvin Attack: RSA timing sidechannel), pulled in
+    # transitively via jsonwebtoken's `rust_crypto` backend (the `rsa`
+    # crate). No fixed version exists upstream (RustCrypto/RSA has not
+    # shipped a constant-time mitigation as of this writing) and switching
+    # to jsonwebtoken's `aws_lc_rs` backend to avoid it would add a C/cmake
+    # build dependency. Accepted risk: exploiting this requires an attacker
+    # who can trigger many RSA signing operations (create_custom_token,
+    # create_session_cookie) against a running service and measure response
+    # timing with high precision over the network — signature *verification*
+    # (the majority of this crate's RSA usage) is unaffected, since it only
+    # uses the public key and has no secret-dependent timing to attack.
+    # Revisit if RustCrypto ships a fix, or if usage patterns change to make
+    # remote timing measurement more practical (e.g. a public unauthenticated
+    # endpoint that triggers signing per-request).
+    "RUSTSEC-2023-0071",
+]
 
 [licenses]
 version = 2

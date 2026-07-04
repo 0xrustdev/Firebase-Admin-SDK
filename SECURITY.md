@@ -44,3 +44,21 @@ supported version range.
   `Debug` implementation that redacts the private key field, so an errant
   `{:?}`/log statement involving a loaded service account cannot leak key
   material.
+
+## Accepted risks
+
+- **RUSTSEC-2023-0071** (Marvin Attack: RSA timing sidechannel), via the
+  `rsa` crate pulled in transitively by `jsonwebtoken`'s `rust_crypto`
+  backend. No upstream fix exists; RustCrypto/RSA has not shipped a
+  constant-time mitigation. Explicitly allowed in `deny.toml` after
+  assessing scope: ID token and session cookie *verification* (the majority
+  of this crate's RSA usage) only touches the public key and is unaffected,
+  since there's no secret-dependent timing to attack. Custom token and
+  session cookie *signing* does use the private key and is theoretically in
+  scope, but exploitation requires an attacker able to trigger many signing
+  operations against a running service and measure response timing with
+  high precision over a real network — a hard, low-practical-likelihood
+  attack. Switching to jsonwebtoken's `aws_lc_rs` backend would eliminate
+  this but adds a C/cmake build dependency; revisit this tradeoff if
+  RustCrypto ships a fix or if a future feature exposes signing behind an
+  unauthenticated, high-throughput endpoint.
