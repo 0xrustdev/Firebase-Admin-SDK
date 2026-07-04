@@ -222,6 +222,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_expired_cache_entry_triggers_a_refetch() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/jwks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(sample_jwk_set_body()))
+            .expect(2) // one fetch to seed, one to observe the actual refetch
+            .mount(&server)
+            .await;
+
+        let cache = cache_pointed_at(&server).await;
+
+        // Seed the cache normally, then backdate `fetched_at` so the entry
+        // reads as already past its TTL — proving `cached_key` treats a
+        // stale entry as a miss and `public_key` refetches, not just that a
+        // cold cache fetches once.
+        cache.public_key("key-1").await.unwrap();
+        {
+            let mut guard = cache.cache.write().unwrap();
+            let cached = guard.as_mut().unwrap();
+            cached.fetched_at = Instant::now() - cached.ttl - Duration::from_secs(1);
+        }
+
+        cache.public_key("key-1").await.unwrap();
+    }
+
+    #[tokio::test]
     async fn malformed_response_body_surfaces_as_jwks_error() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))

@@ -217,6 +217,14 @@ impl AuthClientBuilder {
 
     /// Authenticates using Application Default Credentials, resolved at
     /// request time.
+    ///
+    /// # Implementation status
+    ///
+    /// **Not yet functional.** A client built this way will return a clear
+    /// `AuthError` from any call that needs a bearer token (e.g.
+    /// [`AuthClient::get_user`]) rather than silently sending an
+    /// unauthenticated request — but the actual credential exchange isn't
+    /// implemented yet. Tracked for `v0.2.0`; see `README.md`'s roadmap.
     #[cfg(feature = "application-default-credentials")]
     pub fn application_default_credentials(mut self) -> Self {
         self.use_application_default_credentials = true;
