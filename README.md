@@ -1,6 +1,6 @@
 # firebase-admin-rs
 
-[![CI](https://github.com/USERNAME/firebase-admin-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/firebase-admin-rs/actions/workflows/ci.yml)
+[![CI](https://github.com/0xrustdev/Firebase-Admin-SDK/actions/workflows/ci.yml/badge.svg)](https://github.com/0xrustdev/Firebase-Admin-SDK/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/firebase-admin.svg)](https://crates.io/crates/firebase-admin)
 [![docs.rs](https://docs.rs/firebase-admin/badge.svg)](https://docs.rs/firebase-admin)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
