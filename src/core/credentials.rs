@@ -51,7 +51,7 @@ pub enum Credentials {
     /// A explicitly-provided service account key.
     ServiceAccount(Box<ServiceAccountKey>),
     /// Application Default Credentials, resolved at request time.
-    #[cfg(feature = "application-default-credentials")]
+    #[cfg(feature = "live-user-management")]
     ApplicationDefault,
     /// No credentials; only valid when talking to the Firebase emulator.
     Emulator,

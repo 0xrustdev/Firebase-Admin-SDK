@@ -2,9 +2,10 @@
 
 use crate::auth::custom_token::CustomTokenSigner;
 use crate::auth::error::AuthError;
-use crate::auth::id_token::{IdTokenVerifier, JwksCache};
+use crate::auth::id_token::{IdTokenClaims, IdTokenVerifier, JwksCache};
 use crate::auth::identity_toolkit::IdentityToolkitEndpoints;
 use crate::auth::mode::ClientMode;
+use crate::auth::session_cookie::{SessionCookieCertCache, SessionCookieVerifier};
 use crate::auth::users::{
     CreateUserRequest, UpdateUserRequest, UserOperations, UserPage, UserRecord,
 };
@@ -23,7 +24,10 @@ pub struct AuthClient {
     mode: ClientMode,
     credentials: Credentials,
     id_token_verifier: IdTokenVerifier,
+    session_cookie_verifier: SessionCookieVerifier,
     endpoints: IdentityToolkitEndpoints,
+    #[cfg(feature = "live-user-management")]
+    token_provider: tokio::sync::OnceCell<crate::auth::token_provider::TokenProvider>,
 }
 
 impl AuthClient {
@@ -48,8 +52,8 @@ impl AuthClient {
     /// Creates a Firebase custom token for the given uid.
     ///
     /// Requires the client to have been built with an explicit service
-    /// account key; Application Default Credentials do not expose a private
-    /// key and cannot sign custom tokens.
+    /// account key; Application Default Credentials do not expose a
+    /// private key and cannot sign custom tokens.
     pub fn create_custom_token(
         &self,
         uid: &str,
@@ -80,38 +84,59 @@ impl AuthClient {
         .await
     }
 
+    /// Verifies a Firebase session cookie, returning its claims.
+    ///
+    /// Verified against a different certificate endpoint and issuer than
+    /// [`Self::verify_id_token`] — see [`crate::auth::session_cookie::verify`]
+    /// for why the two aren't interchangeable.
+    pub async fn verify_session_cookie(&self, cookie: &str) -> Result<IdTokenClaims, AuthError> {
+        Ok(self.session_cookie_verifier.verify(cookie).await?)
+    }
+
     /// Resolves an OAuth2 bearer token for calls to the Identity Toolkit
     /// REST API.
     ///
-    /// # Implementation status
-    ///
-    /// User-management calls against production Firebase require an OAuth2
-    /// access token obtained by exchanging the configured credentials with
-    /// Google's token endpoint. That exchange is not implemented yet for
-    /// either [`Credentials::ServiceAccount`] or (when the
-    /// `application-default-credentials` feature is enabled)
-    /// [`Credentials::ApplicationDefault`] — both paths return a clear error
-    /// here rather than sending an unauthenticated request to production.
-    /// Tracked as a required step before `v0.2.0`; see `README.md`'s
-    /// roadmap.
+    /// Returns `None` when talking to the emulator (which doesn't require
+    /// authentication) or in any configuration where a token isn't needed.
+    /// Requires the `live-user-management` feature when talking to
+    /// production Firebase; without it, user-management calls in live mode
+    /// fail with a clear error rather than silently sending an
+    /// unauthenticated request.
     async fn bearer_token(&self) -> Result<Option<String>, AuthError> {
         if !self.mode.requires_bearer_token() {
             return Ok(None);
         }
-        match &self.credentials {
-            Credentials::ServiceAccount(_) => {
-                Err(AuthError::Core(crate::core::CoreError::Credentials(
-                    "OAuth2 bearer token acquisition for service accounts is not yet implemented"
-                        .to_string(),
-                )))
-            }
-            #[cfg(feature = "application-default-credentials")]
-            Credentials::ApplicationDefault => {
-                Err(AuthError::Core(crate::core::CoreError::Credentials(
-                    "Application Default Credentials support is not yet implemented".to_string(),
-                )))
-            }
-            Credentials::Emulator => Ok(None),
+
+        #[cfg(feature = "live-user-management")]
+        {
+            let provider = self
+                .token_provider
+                .get_or_try_init(|| async {
+                    match &self.credentials {
+                        Credentials::ServiceAccount(key) => {
+                            crate::auth::token_provider::TokenProvider::from_service_account(key)
+                        }
+                        Credentials::ApplicationDefault => {
+                            crate::auth::token_provider::TokenProvider::from_application_default()
+                                .await
+                        }
+                        Credentials::Emulator => unreachable!(
+                            "requires_bearer_token() is false in emulator mode; \
+                             bearer_token() returns before reaching this branch"
+                        ),
+                    }
+                })
+                .await?;
+            return provider.access_token().await.map(Some);
+        }
+
+        #[cfg(not(feature = "live-user-management"))]
+        {
+            Err(AuthError::Core(crate::core::CoreError::Credentials(
+                "user management against production Firebase requires the \
+                 `live-user-management` feature"
+                    .to_string(),
+            )))
         }
     }
 
@@ -190,7 +215,7 @@ impl AuthClient {
 pub struct AuthClientBuilder {
     project_id: String,
     service_account: Option<ServiceAccountKey>,
-    #[cfg(feature = "application-default-credentials")]
+    #[cfg(feature = "live-user-management")]
     use_application_default_credentials: bool,
     emulator_host: Option<String>,
     http_client: Option<reqwest::Client>,
@@ -202,7 +227,7 @@ impl AuthClientBuilder {
         Self {
             project_id: project_id.into(),
             service_account: None,
-            #[cfg(feature = "application-default-credentials")]
+            #[cfg(feature = "live-user-management")]
             use_application_default_credentials: false,
             emulator_host: None,
             http_client: None,
@@ -215,17 +240,11 @@ impl AuthClientBuilder {
         self
     }
 
-    /// Authenticates using Application Default Credentials, resolved at
-    /// request time.
-    ///
-    /// # Implementation status
-    ///
-    /// **Not yet functional.** A client built this way will return a clear
-    /// `AuthError` from any call that needs a bearer token (e.g.
-    /// [`AuthClient::get_user`]) rather than silently sending an
-    /// unauthenticated request — but the actual credential exchange isn't
-    /// implemented yet. Tracked for `v0.2.0`; see `README.md`'s roadmap.
-    #[cfg(feature = "application-default-credentials")]
+    /// Authenticates using Application Default Credentials, resolved on
+    /// first use: the `GOOGLE_APPLICATION_CREDENTIALS` environment
+    /// variable, gcloud user credentials, or the GCE/Cloud Run metadata
+    /// server, in that order (see [`gcp_auth::provider`]).
+    #[cfg(feature = "live-user-management")]
     pub fn application_default_credentials(mut self) -> Self {
         self.use_application_default_credentials = true;
         self
@@ -256,7 +275,7 @@ impl AuthClientBuilder {
         let credentials = if let Some(key) = self.service_account {
             Credentials::ServiceAccount(Box::new(key))
         } else {
-            #[cfg(feature = "application-default-credentials")]
+            #[cfg(feature = "live-user-management")]
             if self.use_application_default_credentials {
                 Credentials::ApplicationDefault
             } else if matches!(mode, ClientMode::Emulator { .. }) {
@@ -268,7 +287,7 @@ impl AuthClientBuilder {
                         .to_string(),
                 )));
             }
-            #[cfg(not(feature = "application-default-credentials"))]
+            #[cfg(not(feature = "live-user-management"))]
             if matches!(mode, ClientMode::Emulator { .. }) {
                 Credentials::Emulator
             } else {
@@ -282,6 +301,9 @@ impl AuthClientBuilder {
         let endpoints = mode.endpoints();
         let jwks = JwksCache::new(http.clone());
         let id_token_verifier = IdTokenVerifier::new(project_id.clone(), jwks);
+        let session_cookie_certs = SessionCookieCertCache::new(http.clone());
+        let session_cookie_verifier =
+            SessionCookieVerifier::new(project_id.clone(), session_cookie_certs);
 
         Ok(AuthClient {
             http,
@@ -289,7 +311,10 @@ impl AuthClientBuilder {
             mode,
             credentials,
             id_token_verifier,
+            session_cookie_verifier,
             endpoints,
+            #[cfg(feature = "live-user-management")]
+            token_provider: tokio::sync::OnceCell::new(),
         })
     }
 }

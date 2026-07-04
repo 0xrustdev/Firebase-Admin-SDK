@@ -36,7 +36,12 @@ impl IdTokenVerifier {
         let decoding_key = DecodingKey::from_rsa_components(&n, &e)
             .map_err(|_| TokenVerificationError::InvalidSignature)?;
 
-        verify_with_key(token, &decoding_key, self.project_id.as_str())
+        verify_with_key(
+            token,
+            &decoding_key,
+            self.project_id.as_str(),
+            "https://securetoken.google.com/",
+        )
     }
 }
 
@@ -44,12 +49,20 @@ impl IdTokenVerifier {
 /// [`DecodingKey`], independent of how that key was obtained. Split out from
 /// [`IdTokenVerifier::verify`] so unit tests can exercise claim-validation
 /// logic with fixture keys, without needing a live JWKS fetch.
+///
+/// `issuer_prefix` is parameterized (rather than hardcoded to
+/// `https://securetoken.google.com/`) so
+/// [`crate::auth::session_cookie::verify`] can reuse this exact validation
+/// logic against session cookies' different issuer
+/// (`https://session.firebase.google.com/<project-id>`) instead of
+/// duplicating it.
 pub(crate) fn verify_with_key(
     token: &str,
     decoding_key: &DecodingKey,
     project_id: &str,
+    issuer_prefix: &str,
 ) -> Result<IdTokenClaims, TokenVerificationError> {
-    let expected_issuer = format!("https://securetoken.google.com/{project_id}");
+    let expected_issuer = format!("{issuer_prefix}{project_id}");
     let mut validation = Validation::new(Algorithm::RS256);
     validation.set_audience(&[project_id]);
     validation.set_issuer(&[expected_issuer]);
@@ -132,7 +145,13 @@ mod tests {
     #[test]
     fn accepts_a_valid_token() {
         let token = sign(&valid_claims(now()), Algorithm::RS256);
-        let claims = verify_with_key(&token, &decoding_key(), TEST_PROJECT_ID).unwrap();
+        let claims = verify_with_key(
+            &token,
+            &decoding_key(),
+            TEST_PROJECT_ID,
+            "https://securetoken.google.com/",
+        )
+        .unwrap();
         assert_eq!(claims.sub, "test-uid");
     }
 
@@ -141,7 +160,13 @@ mod tests {
         let mut claims = valid_claims(now());
         claims["exp"] = json!(now() - 100);
         let token = sign(&claims, Algorithm::RS256);
-        let err = verify_with_key(&token, &decoding_key(), TEST_PROJECT_ID).unwrap_err();
+        let err = verify_with_key(
+            &token,
+            &decoding_key(),
+            TEST_PROJECT_ID,
+            "https://securetoken.google.com/",
+        )
+        .unwrap_err();
         assert!(matches!(err, TokenVerificationError::Expired));
     }
 
@@ -150,7 +175,13 @@ mod tests {
         let mut claims = valid_claims(now());
         claims["aud"] = json!("some-other-project");
         let token = sign(&claims, Algorithm::RS256);
-        let err = verify_with_key(&token, &decoding_key(), TEST_PROJECT_ID).unwrap_err();
+        let err = verify_with_key(
+            &token,
+            &decoding_key(),
+            TEST_PROJECT_ID,
+            "https://securetoken.google.com/",
+        )
+        .unwrap_err();
         assert!(matches!(err, TokenVerificationError::AudienceMismatch));
     }
 
@@ -159,7 +190,13 @@ mod tests {
         let mut claims = valid_claims(now());
         claims["iss"] = json!("https://securetoken.google.com/some-other-project");
         let token = sign(&claims, Algorithm::RS256);
-        let err = verify_with_key(&token, &decoding_key(), TEST_PROJECT_ID).unwrap_err();
+        let err = verify_with_key(
+            &token,
+            &decoding_key(),
+            TEST_PROJECT_ID,
+            "https://securetoken.google.com/",
+        )
+        .unwrap_err();
         assert!(matches!(err, TokenVerificationError::IssuerMismatch));
     }
 
@@ -168,7 +205,13 @@ mod tests {
         let mut claims = valid_claims(now());
         claims["sub"] = json!("");
         let token = sign(&claims, Algorithm::RS256);
-        let err = verify_with_key(&token, &decoding_key(), TEST_PROJECT_ID).unwrap_err();
+        let err = verify_with_key(
+            &token,
+            &decoding_key(),
+            TEST_PROJECT_ID,
+            "https://securetoken.google.com/",
+        )
+        .unwrap_err();
         assert!(matches!(err, TokenVerificationError::MissingSubject));
     }
 
@@ -177,7 +220,13 @@ mod tests {
         let mut claims = valid_claims(now());
         claims["auth_time"] = json!(now() + 3600);
         let token = sign(&claims, Algorithm::RS256);
-        let err = verify_with_key(&token, &decoding_key(), TEST_PROJECT_ID).unwrap_err();
+        let err = verify_with_key(
+            &token,
+            &decoding_key(),
+            TEST_PROJECT_ID,
+            "https://securetoken.google.com/",
+        )
+        .unwrap_err();
         assert!(matches!(err, TokenVerificationError::NotYetValid));
     }
 
@@ -191,7 +240,13 @@ mod tests {
             .collect::<String>();
         parts[1] = &tampered_payload;
         let tampered = parts.join(".");
-        let err = verify_with_key(&tampered, &decoding_key(), TEST_PROJECT_ID).unwrap_err();
+        let err = verify_with_key(
+            &tampered,
+            &decoding_key(),
+            TEST_PROJECT_ID,
+            "https://securetoken.google.com/",
+        )
+        .unwrap_err();
         assert!(matches!(
             err,
             TokenVerificationError::InvalidSignature | TokenVerificationError::Malformed(_)

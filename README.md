@@ -21,30 +21,21 @@ Realtime Database, Cloud Messaging, ...).
 
 - ID token verification (RS256, JWKS caching, full claim validation)
 - Custom token creation (signed locally with a service account key)
-- User management (create, get, update, delete, list) via the Identity
-  Toolkit REST API — against the **Firebase Auth Emulator**
-- Custom claims
-- Session cookie creation (verification: see roadmap)
+- Session cookie creation and verification — verified against Google's
+  session-cookie certificate endpoint, which is distinct from the ID-token
+  JWKS endpoint (confirmed against the official Admin SDKs; see
+  [`ARCHITECTURE.md`](ARCHITECTURE.md))
+- User management (create, get, update, delete, list, custom claims) via the
+  Identity Toolkit REST API, against both the **Firebase Auth Emulator** and
+  **production Firebase** — OAuth2 bearer tokens are acquired automatically
+  via [`gcp_auth`](https://crates.io/crates/gcp_auth) for both explicit
+  service account keys and Application Default Credentials
 - A single, unified client for both production Firebase and the local
   [Firebase Auth Emulator](https://firebase.google.com/docs/emulator-suite) —
   no divergent APIs or generic type parameters to juggle
 
-### Not yet implemented
-
-- **User management against production Firebase.** Calls like `get_user`/
-  `create_user`/etc. require an OAuth2 bearer token when talking to live
-  Firebase; that token-exchange step isn't implemented yet, so these calls
-  currently return a clear error in live mode. They work today against the
-  Firebase Auth Emulator, which doesn't require authentication. Tracked for
-  `v0.2.0`.
-- **Application Default Credentials.** The `application-default-credentials`
-  feature flag and `AuthClientBuilder::application_default_credentials()`
-  exist but are not functional yet (same underlying gap as above); the
-  feature is off by default until this lands.
-- **Session cookie verification** (`verify_session_cookie`) — creation works;
-  verification is an explicit `unimplemented!()` stub pending confirmation of
-  which certificate endpoint Firebase uses for session cookies. Tracked for
-  `v0.2.0`.
+All of the above work end-to-end against production Firebase when the
+default `live-user-management` feature is enabled (it is on by default).
 
 ## Quick start
 
@@ -83,9 +74,11 @@ concrete type rather than generic over credentials.
 
 ## Roadmap
 
-- **v0.1.0** — ID token verification, custom token creation, basic user CRUD.
-- **v0.2.0** — Session cookie verification, first-class custom-claims API,
-  full emulator parity.
+- **v0.1.0** — ID token verification, custom token creation, basic user CRUD
+  against the emulator.
+- **v0.2.0** — Session cookie verification, OAuth2 bearer tokens for
+  production user management (service account + Application Default
+  Credentials), first-class custom-claims API.
 - **v0.3.0** — Bulk user import, email action links, initial multi-tenancy.
 - **v1.0.0** — Feature-complete Auth, stable public API, full documentation
   coverage, security review of the token-verification path.

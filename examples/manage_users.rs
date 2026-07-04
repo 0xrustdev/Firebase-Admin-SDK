@@ -1,10 +1,18 @@
-//! Demonstrates basic user management against the Firebase Auth Emulator.
+//! Demonstrates basic user management.
 //!
-//! Start the emulator first (`firebase emulators:start --only auth`), then:
+//! Against the Firebase Auth Emulator (start it first with
+//! `firebase emulators:start --only auth`):
 //!
 //! ```text
 //! FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 cargo run --example manage_users -- demo-project
 //! ```
+//!
+//! Against production Firebase, set `GOOGLE_APPLICATION_CREDENTIALS` to a
+//! service account key file and drop the `FIREBASE_AUTH_EMULATOR_HOST`
+//! env var — no code changes needed, `AuthClient` detects the environment
+//! the same way either way. See `examples/verify_id_token.rs` for
+//! constructing a client from an explicit service account key file instead
+//! of Application Default Credentials.
 
 use firebase_admin::auth::{AuthClient, CreateUserRequest};
 

@@ -8,6 +8,8 @@ pub mod id_token;
 pub mod identity_toolkit;
 pub mod mode;
 pub mod session_cookie;
+#[cfg(feature = "live-user-management")]
+mod token_provider;
 pub mod users;
 
 pub use client::{AuthClient, AuthClientBuilder};

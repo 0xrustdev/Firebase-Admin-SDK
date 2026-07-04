@@ -16,23 +16,28 @@ categories = ["authentication", "api-bindings", "asynchronous"]
 doctest = true
 
 [dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 jsonwebtoken = "9"
+x509-parser = "0.16"
+base64 = "0.22"
 thiserror = "1"
 url = "2"
 gcp_auth = { version = "0.12", optional = true }
 
 [features]
-default = ["emulator"]
+default = ["emulator", "live-user-management"]
 emulator = []
-# Not yet functional: AuthClientBuilder::application_default_credentials()
-# currently returns an explicit "not yet implemented" error at request time.
-# Tracked for a future release; kept off by default so the gcp_auth
-# dependency isn't pulled in for consumers who don't need it yet.
-application-default-credentials = ["dep:gcp_auth"]
+# Enables OAuth2 bearer-token acquisition (via `gcp_auth`) for user
+# management (get_user, create_user, ...) against production Firebase, for
+# both AuthClientBuilder::service_account_key(...) and
+# AuthClientBuilder::application_default_credentials(). Not needed for the
+# emulator, which doesn't require authentication, or for ID token
+# verification / custom token creation, which don't call the Identity
+# Toolkit REST API.
+live-user-management = ["dep:gcp_auth"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
@@ -46,6 +51,9 @@ name = "create_custom_token"
 
 [[example]]
 name = "manage_users"
+
+[[example]]
+name = "session_cookie_login_flow"
 
 [[example]]
 name = "emulator_quickstart"

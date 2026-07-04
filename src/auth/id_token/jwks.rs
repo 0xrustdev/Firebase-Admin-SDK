@@ -5,6 +5,7 @@
 //! `https://www.googleapis.com/service_accounts/v1/metadata/jwk/securetoken@system.gserviceaccount.com`.
 
 use crate::auth::error::TokenVerificationError;
+use crate::core::http::parse_cache_control_max_age;
 use crate::core::HttpClient;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -109,7 +110,7 @@ impl JwksCache {
             .headers()
             .get(reqwest::header::CACHE_CONTROL)
             .and_then(|v| v.to_str().ok())
-            .and_then(parse_max_age)
+            .and_then(parse_cache_control_max_age)
             .unwrap_or(MIN_CACHE_TTL);
 
         let jwk_set: JwkSet = response
@@ -135,14 +136,6 @@ impl JwksCache {
 
         Ok(())
     }
-}
-
-fn parse_max_age(cache_control: &str) -> Option<Duration> {
-    cache_control.split(',').find_map(|part| {
-        let part = part.trim();
-        let value = part.strip_prefix("max-age=")?;
-        value.parse::<u64>().ok().map(Duration::from_secs)
-    })
 }
 
 #[cfg(test)]
@@ -259,15 +252,5 @@ mod tests {
         let cache = cache_pointed_at(&server).await;
         let err = cache.public_key("key-1").await.unwrap_err();
         assert!(matches!(err, TokenVerificationError::Jwks(_)));
-    }
-
-    #[test]
-    fn parses_max_age_from_cache_control_header() {
-        assert_eq!(
-            parse_max_age("public, max-age=21600, must-revalidate"),
-            Some(Duration::from_secs(21600))
-        );
-        assert_eq!(parse_max_age("no-store"), None);
-        assert_eq!(parse_max_age(""), None);
     }
 }
