@@ -45,7 +45,13 @@ lives in [`src/auth/`](src/auth/).
 - [ ] `createProviderConfig` — create a SAML/OIDC provider config — **Hard**, niche
 - [ ] `updateProviderConfig` — update a SAML/OIDC provider config — **Hard**, niche
 - [ ] `deleteProviderConfig` — delete a SAML/OIDC provider config — **Hard**, niche
-- [ ] Multi-tenancy (`tenantManager` + per-tenant scoping of every operation above) — **Hard**, cross-cutting architectural change, biggest single item in this list
+- [ ] `tenantManager` — get the `TenantManager` handle for the project — **Hard**
+- [ ] `TenantManager.createTenant` — create a new auth tenant — **Hard** (once `tenantManager` exists)
+- [ ] `TenantManager.getTenant` — fetch a tenant by id — **Medium** (once `tenantManager` exists)
+- [ ] `TenantManager.listTenants` — paginated listing of tenants — **Medium** (once `tenantManager` exists)
+- [ ] `TenantManager.updateTenant` — update a tenant's config — **Medium** (once `tenantManager` exists)
+- [ ] `TenantManager.deleteTenant` — delete a tenant — **Easy** (once `tenantManager` exists)
+- [ ] `TenantManager.authForTenant` — get a tenant-scoped `TenantAwareAuth` client — **Hard** (a distinct subclass overriding `verifyIdToken`/`createSessionCookie`/`verifySessionCookie` to scope them to the tenant, plus re-scoping every user-management operation above)
 
 ## Cloud Firestore
 
