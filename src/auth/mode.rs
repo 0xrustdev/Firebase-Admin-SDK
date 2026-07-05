@@ -42,10 +42,10 @@ impl ClientMode {
     }
 
     /// Builds the Identity Toolkit endpoint set for this mode.
-    pub fn endpoints(&self) -> IdentityToolkitEndpoints {
+    pub fn endpoints(&self, project_id: &str) -> IdentityToolkitEndpoints {
         match self {
-            ClientMode::Live => IdentityToolkitEndpoints::live(),
-            ClientMode::Emulator { host } => IdentityToolkitEndpoints::emulator(host),
+            ClientMode::Live => IdentityToolkitEndpoints::live(project_id),
+            ClientMode::Emulator { host } => IdentityToolkitEndpoints::emulator(host, project_id),
         }
     }
 

@@ -42,7 +42,17 @@ impl<'a> UserOperations<'a> {
     }
 
     fn request(&self, url: &str) -> reqwest::RequestBuilder {
-        let mut builder = self.http.inner().post(url);
+        self.authorize(self.http.inner().post(url))
+    }
+
+    /// Like [`Self::request`], but issues a `GET` instead of a `POST` — only
+    /// `accounts:batchGet` (list users) uses `GET`; every other Identity
+    /// Toolkit `accounts:*` operation here is a `POST`.
+    fn get_request(&self, url: &str) -> reqwest::RequestBuilder {
+        self.authorize(self.http.inner().get(url))
+    }
+
+    fn authorize(&self, mut builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         if let Some(token) = self.bearer_token {
             builder = builder.bearer_auth(token);
         }
@@ -191,9 +201,13 @@ impl<'a> UserOperations<'a> {
             next_page_token: Option<&'a str>,
         }
 
+        // accounts:batchGet is a GET request with query parameters, unlike
+        // every other Identity Toolkit accounts:* operation used here, which
+        // are POSTs with a JSON body — confirmed against the Firebase Auth
+        // Emulator's own API spec after the POST+JSON form returned a 404.
         let response = self
-            .request(&self.endpoints.batch_get())
-            .json(&BatchGetQuery {
+            .get_request(&self.endpoints.batch_get())
+            .query(&BatchGetQuery {
                 max_results,
                 next_page_token: page_token,
             })
@@ -310,8 +324,11 @@ mod tests {
     #[tokio::test]
     async fn list_users_returns_records_and_next_page_token() {
         let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/accounts:batchGet"))
+        // accounts:batchGet is a GET with a projects/{projectId} path
+        // segment, unlike the flat POST-based accounts:* endpoints used
+        // elsewhere in this crate — see IdentityToolkitEndpoints::batch_get.
+        Mock::given(method("GET"))
+            .and(path("/projects/test-project/accounts:batchGet"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "users": [
                     { "localId": "uid-1" },
