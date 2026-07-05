@@ -51,6 +51,13 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/)
 version bumps automatically. Please follow this convention in your PR title
 and/or commits.
 
+Only `feat:`, `fix:`, `perf:`, and breaking-change (`!`) commits trigger a
+version bump and release PR (configured via `release_commits` in
+`release-plz.toml`). `docs:`, `chore:`, `style:`, `test:`, and `ci:` commits
+still show up in `CHANGELOG.md` history but don't cut a release on their
+own — they accumulate silently until the next `feat:`/`fix:` commit brings a
+release PR anyway.
+
 ## Branching model
 
 This project uses trunk-based development: `main` is always releasable, and
