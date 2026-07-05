@@ -312,7 +312,7 @@ impl AuthClientBuilder {
         };
 
         let http = HttpClient::new(self.http_client.unwrap_or_default());
-        let endpoints = mode.endpoints();
+        let endpoints = mode.endpoints(project_id.as_str());
         let jwks = JwksCache::new(http.clone());
         let id_token_verifier = IdTokenVerifier::new(project_id.clone(), jwks);
         let session_cookie_certs = SessionCookieCertCache::new(http.clone());
