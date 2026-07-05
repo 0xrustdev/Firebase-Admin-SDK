@@ -66,9 +66,13 @@ reviewed, CI-gated pull request. There is no long-lived `dev` branch.
 
 ## Reporting bugs / requesting features
 
-Please use the issue templates under `.github/ISSUE_TEMPLATE/`. For security
-vulnerabilities, see [`SECURITY.md`](SECURITY.md) instead of opening a public
-issue.
+Check [`ROADMAP.md`](ROADMAP.md) first — it's a full checklist of this
+crate's coverage against the official Firebase Admin SDK, with an effort
+estimate on every outstanding item, so you can see at a glance whether
+something is already planned and pick up an unchecked item directly. For
+anything not listed there, please use the issue templates under
+`.github/ISSUE_TEMPLATE/`. For security vulnerabilities, see
+[`SECURITY.md`](SECURITY.md) instead of opening a public issue.
 
 ## Code of Conduct
 
