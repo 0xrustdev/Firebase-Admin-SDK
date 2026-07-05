@@ -74,16 +74,21 @@ concrete type rather than generic over credentials.
 
 ## Roadmap
 
-- **v0.1.0 (current)** — ID token verification, custom token creation,
-  session cookie creation and verification, and full user management
-  (create/get/update/delete/list, custom claims) against both the emulator
-  and production Firebase via OAuth2 bearer tokens (service account +
-  Application Default Credentials).
-- **v0.2.0** — Bulk user import, email action links, initial multi-tenancy.
-- **v0.3.0** — Broader edge-case coverage on the token-verification path
+Patch releases (`0.1.x`) ship bug fixes without new features — see the
+[crates.io version history](https://crates.io/crates/firebase-admin/versions)
+or [CHANGELOG.md](CHANGELOG.md) for exactly what's published right now. The
+milestones below track feature scope, not a specific patch version:
+
+- **0.1 (current milestone)** — ID token verification, custom token
+  creation, session cookie creation and verification, and full user
+  management (create/get/update/delete/list, custom claims) against both the
+  emulator and production Firebase via OAuth2 bearer tokens (service account
+  + Application Default Credentials).
+- **0.2** — Bulk user import, email action links, initial multi-tenancy.
+- **0.3** — Broader edge-case coverage on the token-verification path
   (expired/rotated certificates, malformed key responses, clock-skew
   handling) ahead of a security review.
-- **v1.0.0** — Feature-complete Auth, stable public API, full documentation
+- **1.0** — Feature-complete Auth, stable public API, full documentation
   coverage, security review of the token-verification path.
 - **Post-1.0** — Firestore, then Cloud Storage, Realtime Database, Cloud
   Messaging, Remote Config, as additive modules.
