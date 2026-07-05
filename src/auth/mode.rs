@@ -72,6 +72,29 @@ impl ClientMode {
             ClientMode::Emulator { .. } => Some("fake-api-key"),
         }
     }
+
+    /// The magic `Authorization: Bearer` token value the Firebase Auth
+    /// Emulator recognizes as a privileged/admin caller, or `None` in live
+    /// mode (where a real OAuth2 token is required instead — see
+    /// [`Self::requires_bearer_token`]).
+    ///
+    /// Confirmed against the emulator's own source
+    /// (`firebase-tools/src/emulator/auth/operations.ts`): several
+    /// operations, including user creation, branch on whether the request
+    /// carries recognized OAuth2 credentials (`ctx.security?.Oauth2`) to
+    /// decide whether to treat the caller as an admin. The literal string
+    /// `"owner"` is what the official Admin SDKs send as the bearer token
+    /// when `FIREBASE_AUTH_EMULATOR_HOST` is set, and is the value the
+    /// emulator's Exegesis-based request validator recognizes for this
+    /// purpose. Without it, admin-only operations are instead evaluated on
+    /// the unprivileged/client path and fail with errors like
+    /// `MISSING_ID_TOKEN` that only make sense for that path.
+    pub fn emulator_bearer_token(&self) -> Option<&'static str> {
+        match self {
+            ClientMode::Live => None,
+            ClientMode::Emulator { .. } => Some("owner"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -140,5 +163,27 @@ mod tests {
             host: "localhost:9099".to_string()
         }
         .requires_bearer_token());
+    }
+
+    #[test]
+    fn emulator_bearer_token_is_owner_only_in_emulator_mode() {
+        assert_eq!(ClientMode::Live.emulator_bearer_token(), None);
+        assert_eq!(
+            ClientMode::Emulator {
+                host: "localhost:9099".to_string()
+            }
+            .emulator_bearer_token(),
+            Some("owner")
+        );
+    }
+
+    #[test]
+    fn emulator_api_key_is_present_only_in_emulator_mode() {
+        assert_eq!(ClientMode::Live.emulator_api_key(), None);
+        assert!(ClientMode::Emulator {
+            host: "localhost:9099".to_string()
+        }
+        .emulator_api_key()
+        .is_some());
     }
 }
