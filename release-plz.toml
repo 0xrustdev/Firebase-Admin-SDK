@@ -2,7 +2,27 @@
 changelog_update = true
 git_release_enable = true
 semver_check = true
+# Only feat/fix/perf commits (or any commit with a "!" breaking-change
+# marker) trigger a version bump and release PR. Without this, release-plz
+# proposes a release for every commit since the last one, including
+# docs-only or chore-only changes that have no reason to bump the published
+# crate version — confirmed the hard way when a README wording fix alone
+# triggered a 0.1.2 -> 0.1.3 proposal.
+release_commits = "^(feat|fix|perf)(\\(.+\\))?!?:"
 
 [[package]]
 name = "firebase-admin"
 changelog_path = "CHANGELOG.md"
+
+[changelog]
+commit_parsers = [
+    { message = "^feat", group = "Added" },
+    { message = "^fix", group = "Fixed" },
+    { message = "^perf", group = "Performance" },
+    { message = "^docs", group = "Documentation" },
+    { message = "^chore", group = "Miscellaneous" },
+    { message = "^style", group = "Miscellaneous" },
+    { message = "^test", group = "Miscellaneous" },
+    { message = "^ci", group = "Miscellaneous" },
+    { message = ".*", group = "Other" },
+]
