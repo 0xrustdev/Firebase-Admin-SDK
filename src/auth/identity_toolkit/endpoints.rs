@@ -78,7 +78,10 @@ impl IdentityToolkitEndpoints {
     /// `/accounts:batchGet` path (matching every other operation here)
     /// returned a 404 in practice.
     pub fn batch_get(&self) -> String {
-        format!("{}/projects/{}/accounts:batchGet", self.base, self.project_id)
+        format!(
+            "{}/projects/{}/accounts:batchGet",
+            self.base, self.project_id
+        )
     }
 
     /// `projects/{projectId}:createSessionCookie` — exchange an ID token for
@@ -90,6 +93,9 @@ impl IdentityToolkitEndpoints {
     /// Emulator's own API spec after the previous `/accounts:createSessionCookie`
     /// path returned a 404 for every request, valid or not, in practice.
     pub fn create_session_cookie(&self) -> String {
-        format!("{}/projects/{}:createSessionCookie", self.base, self.project_id)
+        format!(
+            "{}/projects/{}:createSessionCookie",
+            self.base, self.project_id
+        )
     }
 }
