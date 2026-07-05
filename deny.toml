@@ -33,6 +33,11 @@ allow = [
     "Unicode-3.0",
     "Zlib",
     "CC0-1.0",
+    # Data-distribution license (not a software license) used by
+    # webpki-roots, which bundles Mozilla's root CA certificates; permissive,
+    # no copyleft, no patent restrictions. Standard in the Rust ecosystem —
+    # rustls itself allowlists it for the same crate.
+    "CDLA-Permissive-2.0",
 ]
 
 [bans]

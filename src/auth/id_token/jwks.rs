@@ -226,15 +226,19 @@ mod tests {
 
         let cache = cache_pointed_at(&server).await;
 
-        // Seed the cache normally, then backdate `fetched_at` so the entry
+        // Seed the cache normally, then shrink its TTL to zero so the entry
         // reads as already past its TTL — proving `cached_key` treats a
         // stale entry as a miss and `public_key` refetches, not just that a
-        // cold cache fetches once.
+        // cold cache fetches once. Shrinking `ttl` (rather than backdating
+        // `fetched_at` by subtracting from `Instant::now()`) avoids a
+        // platform-dependent underflow panic: on Windows in particular,
+        // `Instant` may not have an hour of monotonic-clock headroom this
+        // early in a freshly started test process.
         cache.public_key("key-1").await.unwrap();
         {
             let mut guard = cache.cache.write().unwrap();
             let cached = guard.as_mut().unwrap();
-            cached.fetched_at = Instant::now() - cached.ttl - Duration::from_secs(1);
+            cached.ttl = Duration::ZERO;
         }
 
         cache.public_key("key-1").await.unwrap();

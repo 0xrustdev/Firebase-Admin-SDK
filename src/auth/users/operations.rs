@@ -13,34 +13,43 @@ use crate::core::{CoreError, HttpClient};
 ///
 /// Requires an OAuth2 bearer token (obtained from the configured service
 /// account or Application Default Credentials) on every request except when
-/// targeting the Firebase Auth Emulator.
+/// targeting the Firebase Auth Emulator, which instead requires a `key=`
+/// query parameter to be present (any value; the emulator does not validate
+/// it) — see [`crate::auth::mode::ClientMode::emulator_api_key`].
 pub struct UserOperations<'a> {
     http: &'a HttpClient,
     endpoints: &'a IdentityToolkitEndpoints,
     bearer_token: Option<&'a str>,
+    emulator_api_key: Option<&'static str>,
 }
 
 impl<'a> UserOperations<'a> {
     /// Creates a new set of user operations bound to the given transport
-    /// and (when talking to production) bearer token.
+    /// and (when talking to production) bearer token, or (when talking to
+    /// the emulator) dummy API key.
     pub fn new(
         http: &'a HttpClient,
         endpoints: &'a IdentityToolkitEndpoints,
         bearer_token: Option<&'a str>,
+        emulator_api_key: Option<&'static str>,
     ) -> Self {
         Self {
             http,
             endpoints,
             bearer_token,
+            emulator_api_key,
         }
     }
 
     fn request(&self, url: &str) -> reqwest::RequestBuilder {
-        let builder = self.http.inner().post(url);
-        match self.bearer_token {
-            Some(token) => builder.bearer_auth(token),
-            None => builder,
+        let mut builder = self.http.inner().post(url);
+        if let Some(token) = self.bearer_token {
+            builder = builder.bearer_auth(token);
         }
+        if let Some(key) = self.emulator_api_key {
+            builder = builder.query(&[("key", key)]);
+        }
+        builder
     }
 
     /// Fetches a single user by uid.
@@ -229,7 +238,7 @@ mod tests {
             .await;
 
         let (http, endpoints) = operations_against(&server).await;
-        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+        let ops = UserOperations::new(&http, &endpoints, Some("token"), None);
 
         let user = ops.get_user("uid-1").await.unwrap();
         assert_eq!(user.uid, "uid-1");
@@ -247,7 +256,7 @@ mod tests {
             .await;
 
         let (http, endpoints) = operations_against(&server).await;
-        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+        let ops = UserOperations::new(&http, &endpoints, Some("token"), None);
 
         let err = ops.get_user("missing-uid").await.unwrap_err();
         assert!(matches!(err, AuthError::UserNotFound));
@@ -270,7 +279,7 @@ mod tests {
             .await;
 
         let (http, endpoints) = operations_against(&server).await;
-        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+        let ops = UserOperations::new(&http, &endpoints, Some("token"), None);
 
         let user = ops
             .create_user(CreateUserRequest {
@@ -293,7 +302,7 @@ mod tests {
             .await;
 
         let (http, endpoints) = operations_against(&server).await;
-        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+        let ops = UserOperations::new(&http, &endpoints, Some("token"), None);
 
         ops.delete_user("uid-1").await.unwrap();
     }
@@ -314,7 +323,7 @@ mod tests {
             .await;
 
         let (http, endpoints) = operations_against(&server).await;
-        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+        let ops = UserOperations::new(&http, &endpoints, Some("token"), None);
 
         let page = ops.list_users(10, None).await.unwrap();
         assert_eq!(page.users.len(), 2);
@@ -337,7 +346,7 @@ mod tests {
             .await;
 
         let (http, endpoints) = operations_against(&server).await;
-        let ops = UserOperations::new(&http, &endpoints, Some("token"));
+        let ops = UserOperations::new(&http, &endpoints, Some("token"), None);
 
         let err = ops
             .create_user(CreateUserRequest {

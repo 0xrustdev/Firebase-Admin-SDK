@@ -75,11 +75,14 @@ impl AuthClient {
         id_token: &str,
         valid_duration: Duration,
     ) -> Result<String, AuthError> {
+        let token = self.bearer_token().await?;
         crate::auth::session_cookie::create_session_cookie(
             &self.http,
             &self.endpoints.create_session_cookie(),
             id_token,
             valid_duration,
+            token.as_deref(),
+            self.mode.emulator_api_key(),
         )
         .await
     }
@@ -141,7 +144,12 @@ impl AuthClient {
     }
 
     fn user_operations<'a>(&'a self, bearer_token: Option<&'a str>) -> UserOperations<'a> {
-        UserOperations::new(&self.http, &self.endpoints, bearer_token)
+        UserOperations::new(
+            &self.http,
+            &self.endpoints,
+            bearer_token,
+            self.mode.emulator_api_key(),
+        )
     }
 
     /// Fetches a user by uid.

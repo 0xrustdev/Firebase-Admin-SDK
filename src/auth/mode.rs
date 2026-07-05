@@ -55,6 +55,23 @@ impl ClientMode {
     pub fn requires_bearer_token(&self) -> bool {
         matches!(self, ClientMode::Live)
     }
+
+    /// The dummy `key=` query parameter value to attach to Identity Toolkit
+    /// REST calls in emulator mode, or `None` in live mode.
+    ///
+    /// Every Identity Toolkit v1 `accounts:*` endpoint requires an API key
+    /// query parameter to be *present*, even on the emulator — it isn't
+    /// validated there, but its absence produces the same
+    /// `PERMISSION_DENIED` / "The request is missing a valid API key." error
+    /// the production API returns for unauthenticated calls. Production
+    /// calls instead rely solely on the OAuth2 bearer token (see
+    /// [`Self::requires_bearer_token`]) and must not send this parameter.
+    pub fn emulator_api_key(&self) -> Option<&'static str> {
+        match self {
+            ClientMode::Live => None,
+            ClientMode::Emulator { .. } => Some("fake-api-key"),
+        }
+    }
 }
 
 #[cfg(test)]
