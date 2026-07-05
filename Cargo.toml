@@ -2,7 +2,7 @@
 name = "firebase-admin"
 version = "0.1.1"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["Firebase Admin RS Contributors"]
 description = "An open-source Firebase Admin SDK for Rust, starting with Authentication"
 license = "MIT OR Apache-2.0"

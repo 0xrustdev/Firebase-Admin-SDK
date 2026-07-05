@@ -96,18 +96,24 @@ impl AuthClient {
         Ok(self.session_cookie_verifier.verify(cookie).await?)
     }
 
-    /// Resolves an OAuth2 bearer token for calls to the Identity Toolkit
-    /// REST API.
+    /// Resolves an `Authorization: Bearer` token for calls to the Identity
+    /// Toolkit REST API.
     ///
-    /// Returns `None` when talking to the emulator (which doesn't require
-    /// authentication) or in any configuration where a token isn't needed.
-    /// Requires the `live-user-management` feature when talking to
-    /// production Firebase; without it, user-management calls in live mode
-    /// fail with a clear error rather than silently sending an
+    /// In emulator mode, returns the literal string `"owner"` — the magic
+    /// token the Firebase Auth Emulator recognizes as a privileged/admin
+    /// caller (confirmed against the emulator's own source, which gates
+    /// admin-only behavior in `accounts:signUp` and similar operations on
+    /// whether the request carries recognized OAuth2 credentials; the
+    /// official Admin SDKs send this same literal in emulator mode). Without
+    /// it, admin calls like creating a user are instead treated as
+    /// unprivileged client requests and rejected. In live mode, resolves a
+    /// real OAuth2 access token from the configured credentials, requiring
+    /// the `live-user-management` feature; without it, user-management calls
+    /// in live mode fail with a clear error rather than silently sending an
     /// unauthenticated request.
     async fn bearer_token(&self) -> Result<Option<String>, AuthError> {
         if !self.mode.requires_bearer_token() {
-            return Ok(None);
+            return Ok(self.mode.emulator_bearer_token().map(str::to_string));
         }
 
         #[cfg(feature = "live-user-management")]

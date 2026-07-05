@@ -8,3 +8,4 @@ service-account*.json
 .idea/
 .vscode/
 *.swp
+firebase-debug.log
