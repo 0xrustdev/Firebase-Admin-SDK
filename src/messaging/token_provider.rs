@@ -1,25 +1,24 @@
-//! OAuth2 bearer token acquisition for calls to the Identity Toolkit REST API.
+//! OAuth2 bearer token acquisition for calls to the FCM v1 and Instance ID
+//! REST APIs.
 //!
-//! Only compiled in when the `live-user-management` feature is enabled.
-//! Wraps [`gcp_auth`], which handles both explicit service-account
-//! credentials and Application Default Credentials through the same
-//! [`gcp_auth::TokenProvider`] trait, and caches tokens internally until
-//! they're close to expiry.
+//! Only compiled in when the `live-messaging` feature is enabled. Mirrors
+//! `crate::auth::token_provider` — wraps [`gcp_auth`], which handles both
+//! explicit service-account credentials and Application Default Credentials
+//! through the same [`gcp_auth::TokenProvider`] trait, and caches tokens
+//! internally until they're close to expiry.
 
-use crate::auth::error::AuthError;
 use crate::core::{CoreError, ServiceAccountKey};
+use crate::messaging::error::MessagingError;
 use std::sync::Arc;
 
-/// The OAuth2 scope required to call the Identity Toolkit REST API.
+/// The OAuth2 scope required to call the FCM v1 and Instance ID REST APIs.
 ///
-/// See <https://cloud.google.com/identity-platform/docs/reference/rest> —
-/// Identity Toolkit endpoints accept the general-purpose cloud-platform
-/// scope.
-const IDENTITY_TOOLKIT_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
+/// See <https://firebase.google.com/docs/cloud-messaging/auth-server> — both
+/// accept the general-purpose cloud-platform scope.
+const MESSAGING_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
 
-/// Resolves and caches OAuth2 bearer tokens for live-mode Identity Toolkit
-/// calls.
-pub struct TokenProvider {
+/// Resolves and caches OAuth2 bearer tokens for FCM v1 and Instance ID calls.
+pub(crate) struct TokenProvider {
     inner: Arc<dyn gcp_auth::TokenProvider>,
 }
 
@@ -31,11 +30,11 @@ impl std::fmt::Debug for TokenProvider {
 
 impl TokenProvider {
     /// Builds a token provider backed by the given service account key.
-    pub fn from_service_account(key: &ServiceAccountKey) -> Result<Self, AuthError> {
+    pub(crate) fn from_service_account(key: &ServiceAccountKey) -> Result<Self, MessagingError> {
         let json = serde_json::to_string(&ServiceAccountKeyJson::from(key))
             .map_err(CoreError::Deserialize)?;
         let account = gcp_auth::CustomServiceAccount::from_json(&json).map_err(|e| {
-            AuthError::Core(CoreError::Credentials(format!(
+            MessagingError::Core(CoreError::Credentials(format!(
                 "failed to initialize service account credentials: {e}"
             )))
         })?;
@@ -48,9 +47,9 @@ impl TokenProvider {
     /// Credentials at first use (`GOOGLE_APPLICATION_CREDENTIALS` env var,
     /// gcloud user credentials, or the GCE/Cloud Run metadata server, in
     /// that order — see [`gcp_auth::provider`]).
-    pub async fn from_application_default() -> Result<Self, AuthError> {
+    pub(crate) async fn from_application_default() -> Result<Self, MessagingError> {
         let inner = gcp_auth::provider().await.map_err(|e| {
-            AuthError::Core(CoreError::Credentials(format!(
+            MessagingError::Core(CoreError::Credentials(format!(
                 "failed to resolve Application Default Credentials: {e}"
             )))
         })?;
@@ -59,16 +58,12 @@ impl TokenProvider {
 
     /// Returns a valid OAuth2 access token, fetching or refreshing one as
     /// needed. Cached internally by `gcp_auth` until close to expiry.
-    pub async fn access_token(&self) -> Result<String, AuthError> {
-        let token = self
-            .inner
-            .token(&[IDENTITY_TOOLKIT_SCOPE])
-            .await
-            .map_err(|e| {
-                AuthError::Core(CoreError::Credentials(format!(
-                    "failed to acquire an OAuth2 access token: {e}"
-                )))
-            })?;
+    pub(crate) async fn access_token(&self) -> Result<String, MessagingError> {
+        let token = self.inner.token(&[MESSAGING_SCOPE]).await.map_err(|e| {
+            MessagingError::Core(CoreError::Credentials(format!(
+                "failed to acquire an OAuth2 access token: {e}"
+            )))
+        })?;
         Ok(token.as_str().to_string())
     }
 }

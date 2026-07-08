@@ -4,12 +4,12 @@ version = "0.2.0"
 edition = "2021"
 rust-version = "1.88"
 authors = ["Firebase Admin RS Contributors"]
-description = "An open-source Firebase Admin SDK for Rust, starting with Authentication"
+description = "An open-source Firebase Admin SDK for Rust: Authentication and Cloud Messaging"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/0xrustdev/Firebase-Admin-SDK"
 documentation = "https://docs.rs/firebase-admin"
 readme = "README.md"
-keywords = ["firebase", "auth", "authentication", "google", "jwt"]
+keywords = ["firebase", "auth", "fcm", "google", "jwt"]
 categories = ["authentication", "api-bindings", "asynchronous"]
 
 [lib]
@@ -26,9 +26,10 @@ base64 = "0.22"
 thiserror = "2"
 url = "2"
 gcp_auth = { version = "0.12", optional = true }
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 
 [features]
-default = ["emulator", "live-user-management"]
+default = ["emulator", "live-user-management", "live-messaging"]
 emulator = []
 # Enables OAuth2 bearer-token acquisition (via `gcp_auth`) for user
 # management (get_user, create_user, ...) against production Firebase, for
@@ -38,6 +39,12 @@ emulator = []
 # verification / custom token creation, which don't call the Identity
 # Toolkit REST API.
 live-user-management = ["dep:gcp_auth"]
+# Enables OAuth2 bearer-token acquisition (via `gcp_auth`) for
+# `MessagingClient` (send, send_each, send_each_for_multicast,
+# subscribe_to_topic, unsubscribe_from_topic). Unlike Identity Toolkit, FCM
+# has no unauthenticated emulator mode, so every messaging operation needs
+# this feature.
+live-messaging = ["dep:gcp_auth"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
@@ -57,3 +64,6 @@ name = "session_cookie_login_flow"
 
 [[example]]
 name = "emulator_quickstart"
+
+[[example]]
+name = "send_message"

@@ -8,9 +8,9 @@
 An open-source, community-maintained **Firebase Admin SDK for Rust**.
 
 The Rust ecosystem has no mature, actively-maintained Firebase Admin SDK.
-This project aims to fill that gap: starting with **Authentication**, and
-expanding feature-by-feature toward a full SDK (Firestore, Cloud Storage,
-Realtime Database, Cloud Messaging, ...).
+This project aims to fill that gap: starting with **Authentication** and
+**Cloud Messaging**, and expanding feature-by-feature toward a full SDK
+(Firestore, Cloud Storage, Realtime Database, Remote Config, ...).
 
 ## Status
 
@@ -37,6 +37,22 @@ Realtime Database, Cloud Messaging, ...).
 All of the above work end-to-end against production Firebase when the
 default `live-user-management` feature is enabled (it is on by default).
 
+## Features (Cloud Messaging)
+
+- Sending a single message to a device token, topic, or condition
+  (`send`), with optional dry-run validation
+- Sending up to 500 messages concurrently, each with its own
+  success/failure result (`send_each`, `send_each_for_multicast`)
+- Topic subscription management (`subscribe_to_topic`,
+  `unsubscribe_from_topic`), reporting per-token failures rather than
+  failing the whole call when only some tokens are rejected
+- Full message configuration: notifications, custom data, and
+  platform-specific delivery options for Android, APNs, and Web Push
+
+Cloud Messaging has no emulator — every operation requires a live service
+account or Application Default Credentials (the default `live-messaging`
+feature).
+
 ## Quick start
 
 ```rust,no_run
@@ -60,6 +76,30 @@ async fn main() -> Result<(), firebase_admin::Error> {
 Switching to the local emulator requires no code changes — just set
 `FIREBASE_AUTH_EMULATOR_HOST=localhost:9099` in your environment, or call
 `.use_emulator("localhost:9099")` on the builder explicitly.
+
+```rust,no_run
+use firebase_admin::messaging::{Message, MessagingClient, Notification};
+
+#[tokio::main]
+async fn main() -> Result<(), firebase_admin::Error> {
+    let messaging = MessagingClient::builder("my-project-id")
+        .application_default_credentials()
+        .build()?;
+
+    let message = Message::to_token("<device-registration-token>").with_notification(
+        Notification {
+            title: Some("Hello".to_string()),
+            body: Some("This is a test notification".to_string()),
+            image: None,
+        },
+    );
+
+    let message_id = messaging.send(&message, false).await?;
+    println!("sent message: {message_id}");
+
+    Ok(())
+}
+```
 
 More examples live in [`examples/`](examples/).
 
