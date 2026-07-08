@@ -443,6 +443,7 @@ name = "firebase-admin"
 version = "0.2.0"
 dependencies = [
  "base64",
+ "futures-util",
  "gcp_auth",
  "jsonwebtoken",
  "reqwest",

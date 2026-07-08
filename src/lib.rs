@@ -1,10 +1,11 @@
 //! An open-source Firebase Admin SDK for Rust.
 //!
-//! `firebase-admin` currently implements Firebase **Authentication**:
-//! verifying ID tokens, creating custom tokens, managing users, and
-//! session cookies. Support for additional Firebase services (Firestore,
-//! Cloud Storage, ...) is planned; see `ARCHITECTURE.md` in the repository
-//! root for the project's module and versioning conventions.
+//! `firebase-admin` currently implements Firebase **Authentication**
+//! (verifying ID tokens, creating custom tokens, managing users, and
+//! session cookies) and **Cloud Messaging** (sending FCM messages and
+//! managing topic subscriptions). Support for additional Firebase services
+//! (Firestore, Cloud Storage, ...) is planned; see `ARCHITECTURE.md` in the
+//! repository root for the project's module and versioning conventions.
 //!
 //! # Example
 //!
@@ -29,6 +30,7 @@
 pub mod auth;
 pub mod core;
 mod error;
+pub mod messaging;
 
 pub use error::Error;
 

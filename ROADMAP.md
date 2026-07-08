@@ -102,12 +102,12 @@ out `@google-cloud/storage` bucket handles under the app's credentials.
 
 Source: `firebase-admin-node`'s `messaging/` module (`Messaging` class).
 
-- 🟡 `[Medium]` — `send` — send a single FCM message, with optional dry-run mode
-- ⚪ `[Medium]` — `sendEach` — send up to 500 messages individually, returns a batch response (once `send` exists)
-- ⚪ `[Medium]` — `sendEachForMulticast` — send one message to multiple registration tokens/FIDs (once `send` exists)
-- 🟡 `[Easy]` — `subscribeToTopic` — subscribe device tokens to an FCM topic
-- 🟡 `[Easy]` — `unsubscribeFromTopic` — unsubscribe device tokens from an FCM topic
-- 🟡 `[Easy]` — `enableLegacyHttpTransport` — opt `sendEach`/`sendEachForMulticast` into HTTP/1.1 transport (once those exist)
+- 🟢 `send` — send a single FCM message, with optional dry-run mode
+- 🟢 `sendEach` — send up to 500 messages individually, returns a batch response
+- 🟢 `sendEachForMulticast` — send one message to multiple registration tokens/FIDs
+- 🟢 `subscribeToTopic` — subscribe device tokens to an FCM topic
+- 🟢 `unsubscribeFromTopic` — unsubscribe device tokens from an FCM topic
+- 🟢 `enableLegacyHttpTransport` — opt `sendEach`/`sendEachForMulticast` into HTTP/1.1 transport (no-op on this crate's `reqwest`/`hyper` transport, which already negotiates HTTP/2 automatically; the method exists for API parity with the official Admin SDKs)
 
 ## Remote Config
 

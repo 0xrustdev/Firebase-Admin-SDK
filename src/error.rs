@@ -2,6 +2,7 @@
 
 use crate::auth::AuthError;
 use crate::core::CoreError;
+use crate::messaging::MessagingError;
 
 /// The top-level error type for `firebase-admin`.
 ///
@@ -13,6 +14,10 @@ pub enum Error {
     /// An error from the `auth` module.
     #[error(transparent)]
     Auth(#[from] AuthError),
+
+    /// An error from the `messaging` module.
+    #[error(transparent)]
+    Messaging(#[from] MessagingError),
 
     /// A service-independent core error.
     #[error(transparent)]
